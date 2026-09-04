@@ -6,10 +6,11 @@ import { LocalStorage } from "@zos/storage";
 import { replace } from "@zos/router";
 import { DEVICE_WIDTH } from "../utils/config/device";
 
-let noteText = "";
-
 const NOTES_KEY = "quick_notes";
+
 const localStorage = new LocalStorage();
+
+let noteText = "";
 
 Page(
   BasePage({
@@ -18,6 +19,25 @@ Page(
     build() {
       // Remove status bar
       hmUI.setStatusBarVisible(false);
+
+      // Get selected note index
+      const index = Number(this.request?.params?.index ?? 0);
+
+      // Load notes
+      const notes = localStorage.getItem(NOTES_KEY, []);
+
+      if (!Array.isArray(notes) || !notes[index]) {
+        console.log("Note not found");
+
+        replace({
+          url: "page/index",
+        });
+
+        return;
+      }
+
+      this.noteIndex = index;
+      noteText = notes[index].text || "";
 
       // Background
       hmUI.createWidget(hmUI.widget.FILL_RECT, {
@@ -34,19 +54,19 @@ Page(
         y: px(25),
         w: DEVICE_WIDTH - px(60),
         h: px(55),
-        text: "New Note",
+        text: "Note",
         text_size: px(36),
         color: 0xffffff,
         align_h: hmUI.align.CENTER_H,
         align_v: hmUI.align.CENTER_V,
       });
 
-      // Note preview card
+      // Note card
       hmUI.createWidget(hmUI.widget.FILL_RECT, {
         x: px(30),
         y: px(95),
         w: DEVICE_WIDTH - px(60),
-        h: px(180),
+        h: px(190),
         color: 0x181818,
         radius: px(24),
       });
@@ -56,40 +76,73 @@ Page(
         x: px(50),
         y: px(115),
         w: DEVICE_WIDTH - px(100),
-        h: px(140),
-        text: "Tap below to start typing",
-        text_size: px(27),
-        color: 0x777777,
+        h: px(150),
+        text: noteText,
+        text_size: px(26),
+        color: 0xffffff,
         align_h: hmUI.align.LEFT,
         align_v: hmUI.align.TOP,
         text_style: hmUI.text_style.WRAP,
       });
 
-      // Open system keyboard with voice input
-      this.openKeyboard();
-
-      // Save button
+      // EDIT button
       hmUI.createWidget(hmUI.widget.BUTTON, {
-        x: px(50),
-        y: px(325),
-        w: DEVICE_WIDTH - px(100),
-        h: px(70),
-        text: "SAVE",
-        text_size: px(28),
-        radius: px(35),
+        x: px(30),
+        y: px(310),
+        w: px(DEVICE_WIDTH / 2 - 40),
+        h: px(60),
+        text: "EDIT",
+        text_size: px(25),
+        radius: px(30),
         normal_color: 0x9bd8a5,
         press_color: 0x78b982,
         text_color: 0x000000,
 
         click_func: () => {
-          this.saveNote();
+          this.openKeyboard();
+        },
+      });
+
+      // DELETE button
+      hmUI.createWidget(hmUI.widget.BUTTON, {
+        x: px(DEVICE_WIDTH / 2 + 10),
+        y: px(310),
+        w: px(DEVICE_WIDTH / 2 - 40),
+        h: px(60),
+        text: "DELETE",
+        text_size: px(23),
+        radius: px(30),
+        normal_color: 0x252525,
+        press_color: 0x383838,
+        text_color: 0xffffff,
+
+        click_func: () => {
+          this.deleteNote();
+        },
+      });
+
+      // BACK button
+      hmUI.createWidget(hmUI.widget.BUTTON, {
+        x: px(50),
+        y: px(390),
+        w: DEVICE_WIDTH - px(100),
+        h: px(60),
+        text: "BACK",
+        text_size: px(24),
+        radius: px(30),
+        normal_color: 0x181818,
+        press_color: 0x282828,
+        text_color: 0xffffff,
+
+        click_func: () => {
+          replace({
+            url: "page/index",
+          });
         },
       });
     },
 
     openKeyboard() {
-      console.log("Opening system voice keyboard");
-
       createKeyboard({
         inputType: inputType.VOICE,
 
@@ -100,45 +153,46 @@ Page(
 
           this.noteTextWidget.setProperty(
             hmUI.prop.TEXT,
-            noteText || "Tap below to start typing"
+            noteText
           );
 
-          console.log("Note text:", noteText);
+          this.saveEditedNote();
         },
 
         onCancel: () => {
-          console.log("Keyboard cancelled");
           deleteKeyboard();
         },
       });
     },
 
-    saveNote() {
-      if (!noteText.trim()) {
-        console.log("Cannot save empty note");
+    saveEditedNote() {
+      let notes = localStorage.getItem(NOTES_KEY, []);
+
+      if (!Array.isArray(notes) || !notes[this.noteIndex]) {
         return;
       }
 
-      // Get existing notes
-      let notes = localStorage.getItem(NOTES_KEY, []);
+      notes[this.noteIndex].text = noteText;
 
-      if (!Array.isArray(notes)) {
-        notes = [];
-      }
-
-      // Add new note
-      notes.push({
-        text: noteText,
-        createdAt: Date.now(),
-      });
-
-      // Save notes
       localStorage.setItem(NOTES_KEY, notes);
 
-      console.log("Note saved:", noteText);
+      console.log("Note updated:", noteText);
 
-      // Close keyboard
       deleteKeyboard();
+    },
+
+    deleteNote() {
+      let notes = localStorage.getItem(NOTES_KEY, []);
+
+      if (!Array.isArray(notes) || !notes[this.noteIndex]) {
+        return;
+      }
+
+      notes.splice(this.noteIndex, 1);
+
+      localStorage.setItem(NOTES_KEY, notes);
+
+      console.log("Note deleted");
 
       // Replace current page with home page
       replace({
